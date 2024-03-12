@@ -13,31 +13,54 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
 
     IERC20 public usdc; // USDC token interface
 
-    uint256 public airlineFeePercentage = 5;
-    uint256 public traveldqFeePercentage = 5;
+    uint256 public airlineFeePercentage = 5; // 5% goes to airlines wallet
+    uint256 public traveldqFeePercentage = 5; // 5% goes to travelDaq
+    uint256 public timeBeforeBuy = 10800; // 3 hours
+    address public airlineUsdcAddress; // airlines usdc address
+    address public traveldaqUsdcAddress; // airlines usdc address
+
 
     // Metadata structure for each ticket
     struct TicketMetadata {
         string airlineCode;
         string pnr;
-        uint256 travelDate;
         uint256 flightTime;
+    }
+
+    function updateAirlineFeePercentage(uint256 _airlineFeePercentage) public onlyOwner {
+        airlineFeePercentage = _airlineFeePercentage;
+    }
+
+    function updateTraveldqFeePercentage(uint256 _traveldqFeePercentage) public onlyOwner {
+        traveldqFeePercentage = _traveldqFeePercentage;
+    }
+
+    function updateTimeBeforeBuy(uint256 _timeBeforeBuy) public onlyOwner {
+        timeBeforeBuy = _timeBeforeBuy;
+    }
+
+    function updateAirlinesUsdcAddress(address _airlineUsdcAddress) public onlyOwner {
+        airlineUsdcAddress = _airlineUsdcAddress;
+    }
+
+    function updateTraveldaqUsdcAddress(address _traveldaqUsdcAddress) public onlyOwner {
+        traveldaqUsdcAddress = _traveldaqUsdcAddress;
     }
 
     mapping(uint256 => TicketMetadata) private _ticketDetails;
 
-    constructor(address initialOwner, address usdcAddress)
+    constructor(address initialOwner, address usdcAddress, uint256 _timeBeforeBuy)
         ERC721("TraveldqToken", "TDT")
         Ownable(initialOwner)
     {
         transferOwnership(initialOwner);
         usdc = IERC20(usdcAddress);
+        timeBeforeBuy = _timeBeforeBuy; // 3 hours is 10800
     }
 
-
-    function mintTicket(address to, string memory airlineCode, string memory pnr, uint256 travelDate, uint256 flightTime, string memory tokenURI) public onlyOwner {
+    function mintTicket(address to, string memory airlineCode, string memory pnr, uint256 flightTime) public onlyOwner {
         uint256 tokenId = _nextTokenId++;
-        _ticketDetails[tokenId] = TicketMetadata(airlineCode, pnr, travelDate, flightTime);
+        _ticketDetails[tokenId] = TicketMetadata(airlineCode, pnr, flightTime);
         _safeMint(to, tokenId);
     }
 
@@ -50,16 +73,21 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
     }
 
     function sellTicket(uint256 tokenId, address buyer, uint256 salePrice) public {
-        require(_isAuthorized(owner(), _msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        // requires isApproved in erc721 
+        require(_isAuthorized(_ownerOf(tokenId), _msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
         require(block.timestamp <= _ticketDetails[tokenId].flightTime - 3 hours, "Resale prohibited close to flight time");
+        require(usdc.balanceOf(buyer) >= salePrice, "Buyer does not have enough money");
 
-        uint256 airlineFee = (salePrice * airlineFeePercentage) / 100;
-        uint256 traveldqFee = (salePrice * traveldqFeePercentage) / 100;
-        uint256 sellerRevenue = salePrice - airlineFee - traveldqFee;
+        uint256 airlineFee = salePrice * airlineFeePercentage * 10**16; // no percentage here as we did 10**16 above.
+        uint256 traveldqFee = salePrice * traveldqFeePercentage * 10**16 ; // no percentage here as we did 10**16 above.
+        uint256 sellerRevenue = (salePrice * 10**18) - airlineFee - traveldqFee; // multiplying salesprice by 10**18 here 
 
-        usdc.transferFrom(buyer, owner(), airlineFee);
-        usdc.transferFrom(buyer, _msgSender(), sellerRevenue);
-        usdc.transferFrom(buyer, address(this), traveldqFee);
+        // require isApproved in erc20
+        usdc.transferFrom(buyer, airlineUsdcAddress, airlineFee); // airlines
+        // require isApproved in erc20
+        usdc.transferFrom(buyer, _ownerOf(tokenId), sellerRevenue); // seller
+        // require isApproved in erc20
+        usdc.transferFrom(buyer, traveldaqUsdcAddress, traveldqFee); // traveldaq
 
         _transfer(_msgSender(), buyer, tokenId);
     }
@@ -80,7 +108,6 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
     }
 
     // The following functions are overrides required by Solidity.
-
     function _update(
       address to,
       uint256 tokenId,
@@ -88,16 +115,8 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
     ) internal override(ERC721, ERC721Enumerable, ERC721Pausable) returns (address) 
     {
         require(_ticketDetails[tokenId].flightTime - 3 hours > block.timestamp, "Ticket sales are closed");
-        super._update(to, tokenId, auth);
+        return super._update(to, tokenId, auth);
     }
-
-    // function _update(address to, uint256 tokenId, address auth)
-    //     internal
-    //     override(ERC721, ERC721Enumerable, ERC721Pausable)
-    //     returns (address)
-    // {
-    //     return super._update(to, tokenId, auth);
-    // }
 
     function _increaseBalance(address account, uint128 value)
         internal

@@ -1,5 +1,9 @@
-const AirlineTicket = artifacts.require("AirlineTicket");
+const AirlineTicket = artifacts.require("TraveldqToken");
+const USDC = artifacts.require("./usdc.sol");
 
-module.exports = function (deployer) {
-  deployer.deploy(AirlineTicket, "<USDC_CONTRACT_ADDRESS>");
+module.exports = async (deployer) => {
+  await deployer.deploy(USDC, {gas: 6721975});
+    // .then(() => console.log(USDC.address))
+    // .then(() => deployer.deploy(AirlineTicket, USDC.address))
+    // .then(() => console.log(AirlineTicket.address))
 };
