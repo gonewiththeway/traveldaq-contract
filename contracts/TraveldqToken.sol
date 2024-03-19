@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Compatible with OpenZeppelin Contracts ^5.0.0
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.1;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -26,11 +26,10 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
 
     mapping(uint256 => TicketMetadata) private _ticketDetails;
 
-    constructor(address initialOwner, address usdcAddress)
+    constructor(address usdcAddress)
         ERC721("TraveldqToken", "TDT")
-        Ownable(initialOwner)
     {
-        transferOwnership(initialOwner);
+        transferOwnership(_msgSender());
         usdc = IERC20(usdcAddress);
     }
 
@@ -50,7 +49,8 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
     }
 
     function sellTicket(uint256 tokenId, address buyer, uint256 salePrice) public {
-        require(_isAuthorized(_ownerOf(tokenId), _msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(buyer != _owners[tokenId], "ERC721: buyer can not be the seller");
+        require(_isApprovedOrOwner(buyer, tokenId), "ERC721: transfer caller is not owner nor approved");
         require(block.timestamp <= _ticketDetails[tokenId].flightTime - 3 hours, "Resale prohibited close to flight time");
 
         uint256 airlineFee = (salePrice * airlineFeePercentage) / 100;
@@ -58,15 +58,10 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
         uint256 sellerRevenue = salePrice - airlineFee - traveldqFee;
 
         usdc.transferFrom(buyer, owner(), airlineFee);
-        usdc.transferFrom(buyer, _msgSender(), sellerRevenue);
+        usdc.transferFrom(buyer, _owners[tokenId], sellerRevenue);
         usdc.transferFrom(buyer, address(this), traveldqFee);
 
-        _transfer(_msgSender(), buyer, tokenId);
-    }
-
-    function cancelTicket(uint256 tokenId) public {
-        require(_isAuthorized(owner(), _msgSender(), tokenId) , "ERC721: burn caller is not owner nor approved");
-        _burn(tokenId);
+        _transfer(_owners[tokenId], buyer, tokenId);
     }
 
     function setDistributionRatios(uint256 newAirlineFeePercentage, uint256 newTraveldqFeePercentage) public onlyOwner {
@@ -79,25 +74,6 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
         return _ticketDetails[tokenId];
     }
 
-    // The following functions are overrides required by Solidity.
-    function _update(
-      address to,
-      uint256 tokenId,
-      address auth
-    ) internal override(ERC721, ERC721Enumerable, ERC721Pausable) returns (address) 
-    {
-        require(_ticketDetails[tokenId].flightTime - 3 hours > block.timestamp, "Ticket sales are closed");
-        super._update(to, tokenId, auth);
-        return auth;
-    }
-
-    function _increaseBalance(address account, uint128 value)
-        internal
-        override(ERC721, ERC721Enumerable)
-    {
-        super._increaseBalance(account, value);
-    }
-
     function supportsInterface(bytes4 interfaceId)
         public
         view
@@ -106,4 +82,19 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
     {
         return super.supportsInterface(interfaceId);
     }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 batchSize
+    ) internal virtual override(ERC721, ERC721Pausable, ERC721Enumerable) {
+        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+
+        // do stuff before every transfer
+        // e.g. check that vote (other than when minted) 
+        // being transferred to registered candidate
+    }
+
+
 }
