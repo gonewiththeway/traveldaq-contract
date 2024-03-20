@@ -15,6 +15,8 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
 
     uint256 public airlineFeePercentage = 5;
     uint256 public traveldqFeePercentage = 5;
+    address public airlinesAddress;
+    address public traveldqAddress;
 
     // Metadata structure for each ticket
     struct TicketMetadata {
@@ -24,13 +26,27 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
         uint256 flightTime;
     }
 
+    // Setter for airlinesAddress
+    function setAirlinesAddress(address _airlinesAddress) public onlyOwner {
+        require(_airlinesAddress != address(0), "Invalid address");
+        airlinesAddress = _airlinesAddress;
+    }
+
+    // Setter for traveldqAddress
+    function setTraveldqAddress(address _traveldqAddress) public onlyOwner {
+        require(_traveldqAddress != address(0), "Invalid address");
+        traveldqAddress = _traveldqAddress;
+    }
+
     mapping(uint256 => TicketMetadata) private _ticketDetails;
 
-    constructor(address usdcAddress)
+    constructor(address usdcAddress, address _airlinesAddress, address _traveldqAddress)
         ERC721("TraveldqToken", "TDT")
     {
         transferOwnership(_msgSender());
         usdc = IERC20(usdcAddress);
+        airlinesAddress = _airlinesAddress;
+        traveldqAddress = _traveldqAddress;
     }
 
 
@@ -50,16 +66,16 @@ contract TraveldqToken is ERC721, ERC721Enumerable, ERC721Pausable, Ownable {
 
     function sellTicket(uint256 tokenId, address buyer, uint256 salePrice) public {
         require(buyer != _owners[tokenId], "ERC721: buyer can not be the seller");
-        require(_isApprovedOrOwner(buyer, tokenId), "ERC721: transfer caller is not owner nor approved");
+        require(_isApprovedOrOwner(address(this), tokenId), "ERC721: transfer caller is not owner nor approved");
         require(block.timestamp <= _ticketDetails[tokenId].flightTime - 3 hours, "Resale prohibited close to flight time");
 
         uint256 airlineFee = (salePrice * airlineFeePercentage) / 100;
         uint256 traveldqFee = (salePrice * traveldqFeePercentage) / 100;
         uint256 sellerRevenue = salePrice - airlineFee - traveldqFee;
 
-        usdc.transferFrom(buyer, owner(), airlineFee);
+        usdc.transferFrom(buyer, airlinesAddress, airlineFee);
+        usdc.transferFrom(buyer, traveldqAddress, traveldqFee);
         usdc.transferFrom(buyer, _owners[tokenId], sellerRevenue);
-        usdc.transferFrom(buyer, address(this), traveldqFee);
 
         _transfer(_owners[tokenId], buyer, tokenId);
     }
