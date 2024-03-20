@@ -41,10 +41,11 @@
  * https://trufflesuite.com/docs/truffle/getting-started/using-the-truffle-dashboard/
  */
 
-// require('dotenv').config();
-// const { MNEMONIC, PROJECT_ID } = process.env;
+require('dotenv').config();
+const { MNEMONIC } = process.env;
 
-// const HDWalletProvider = require('@truffle/hdwallet-provider');
+const HDWalletProvider = require('@truffle/hdwallet-provider');
+const mumbaiRPCUrl = "https://polygon-mumbai.g.alchemy.com/v2/EyEryMbB9w_iJaCeDl7yTlw3bsDs0c0a"
 
 module.exports = {
   /**
@@ -74,14 +75,13 @@ module.exports = {
     },
     //
     // An additional network, but with some advanced options…
-    // advanced: {
-    //   port: 8777,             // Custom port
-    //   network_id: 1342,       // Custom network
-    //   gas: 8500000,           // Gas sent with each transaction (default: ~6700000)
-    //   gasPrice: 20000000000,  // 20 gwei (in wei) (default: 100 gwei)
-    //   from: <address>,        // Account to send transactions from (default: accounts[0])
-    //   websocket: true         // Enable EventEmitter interface for web3 (default: false)
-    // },
+    mumbai: {
+      provider: () => new HDWalletProvider(MNEMONIC, mumbaiRPCUrl),
+      network_id: 80001, // Mumbai's network id
+      confirmations: 2,
+      timeoutBlocks: 200,
+      skipDryRun: true
+    },
     //
     // Useful for deploying to a public network.
     // Note: It's important to wrap the provider as a function to ensure truffle uses a new provider every time.

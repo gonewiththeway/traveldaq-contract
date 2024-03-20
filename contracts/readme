@@ -1,0 +1,11 @@
+truffle(mumbai)> let td1 = await TraveldqToken.deployed();
+
+truffle(mumbai)> td1.mintTicket(accounts[5], "AIA", "AIA123", 1743222454, 1743222454); 
+0xff2879826276621060c4E3cDa791351a931555FF 
+
+td1.setDistributionRatios(5, 15);
+
+const ticketPrice = 100000000000;
+
+seller = accounts[5];
+buyer = accounts[3];
